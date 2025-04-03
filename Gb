@@ -1,0 +1,185 @@
+projeto-tarefas-inteligentes/
+├── backend/
+│   ├── src/
+│   │   ├── tasks/
+│   │   │   ├── tasks.controller.ts
+│   │   │   ├── tasks.service.ts
+│   │   │   ├── tasks.module.ts
+│   │   │   ├── tasks.entity.ts
+│   │   │   ├── priority.service.ts
+│   │   ├── app.module.ts
+│   │   ├── main.ts
+│   ├── test/
+│   │   ├── tasks.e2e-spec.ts
+│   ├── package.json
+│   ├── tsconfig.json
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── tasks/
+│   │   │   │   ├── tasks.component.ts
+│   │   │   │   ├── tasks.component.html
+│   │   │   │   ├── tasks.service.ts
+│   │   ├── app.module.ts
+│   │   ├── main.ts
+│   ├── package.json
+│   ├── angular.json
+├── README.md
+Backend NestJS
+backend/src/tasks/tasks.entity.ts
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+
+@Entity()
+export class Task {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column()
+  description: string;
+
+  @Column()
+  priority: string; // Adicionado o campo de prioridade
+}
+
+backend/src/tasks/priority.service.ts
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class PriorityService {
+  async getPriority(description: string): Promise<string> {
+    // Simulação da API de IA
+    const priorities = ['Alta', 'Média', 'Baixa'];
+    const randomIndex = Math.floor(Math.random() * priorities.length);
+    return priorities[randomIndex];
+  }
+}
+
+backend/src/tasks/tasks.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Task } from './tasks.entity';
+import { PriorityService } from './priority.service';
+
+@Injectable()
+export class TasksService {
+  constructor(
+    @InjectRepository(Task)
+    private tasksRepository: Repository<Task>,
+    private priorityService: PriorityService,
+  ) {}
+
+  async create(description: string): Promise<Task> {
+    const priority = await this.priorityService.getPriority(description);
+    const task = this.tasksRepository.create({ description, priority });
+    return this.tasksRepository.save(task);
+  }
+
+  async findAll(priority?: string): Promise<Task[]> {
+    if (priority) {
+      return this.tasksRepository.find({ where: { priority } });
+    }
+    return this.tasksRepository.find();
+  }
+}
+
+backend/src/tasks/tasks.controller.ts
+import { Controller, Get, Post, Body, Query } from '@nestjs/common';
+import { TasksService } from './tasks.service';
+import { Task } from './tasks.entity';
+
+@Controller('tasks')
+export class TasksController {
+  constructor(private tasksService: TasksService) {}
+
+  @Post()
+  async create(@Body('description') description: string): Promise<Task> {
+    return this.tasksService.create(description);
+  }
+
+  @Get()
+  async findAll(@Query('priority') priority?: string): Promise<Task[]> {
+    return this.tasksService.findAll(priority);
+  }
+}
+
+Frontend Angular
+frontend/src/app/tasks/tasks.component.ts
+import { Component, OnInit } from '@angular/core';
+import { TasksService } from './tasks.service';
+
+@Component({
+  selector: 'app-tasks',
+  templateUrl: './tasks.component.html',
+  styleUrls: ['./tasks.component.css'],
+})
+export class TasksComponent implements OnInit {
+  tasks: any[] = [];
+  description = '';
+  selectedPriority = '';
+  priorities = ['Alta', 'Média', 'Baixa'];
+
+  constructor(private tasksService: TasksService) {}
+
+  ngOnInit(): void {
+    this.loadTasks();
+  }
+
+  loadTasks(): void {
+    this.tasksService.getTasks(this.selectedPriority).subscribe((tasks) => {
+      this.tasks = tasks;
+    });
+  }
+
+  createTask(): void {
+    this.tasksService.createTask(this.description).subscribe(() => {
+      this.loadTasks();
+      this.description = '';
+    });
+  }
+}
+
+frontend/src/app/tasks/tasks.component.html
+<div>
+  <input [(ngModel)]="description" placeholder="Descrição da tarefa" />
+  <button (click)="createTask()">Criar Tarefa</button>
+
+  <select [(ngModel)]="selectedPriority" (change)="loadTasks()">
+    <option value="">Todas as prioridades</option>
+    <option *ngFor="let priority of priorities" [value]="priority">
+      {{ priority }}
+    </option>
+  </select>
+
+  <ul>
+    <li *ngFor="let task of tasks">
+      {{ task.description }} - Prioridade: {{ task.priority }}
+    </li>
+  </ul>
+</div>
+
+frontend/src/app/tasks/tasks.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class TasksService {
+  private apiUrl = 'http://localhost:3000/tasks'; // Ajuste a URL do backend
+
+  constructor(private http: HttpClient) {}
+
+  getTasks(priority?: string): Observable<any[]> {
+    let params = new HttpParams();
+    if (priority) {
+      params = params.set('priority', priority);
+    }
+    return this.http.get<any[]>(this.apiUrl, { params });
+  }
+
+  createTask(description: string): Observable<any> {
+    return this.http.post(this.apiUrl, { description });
+  }
+}
