@@ -183,3 +183,80 @@ export class TasksService {
     return this.http.post(this.apiUrl, { description });
   }
 }
+
+import { Component, OnInit } from '@angular/core';
+import { TasksService } from './tasks.service';
+
+@Component({
+  selector: 'app-tasks',
+  templateUrl: './tasks.component.html',
+  styleUrls: ['./tasks.component.css'],
+})
+export class TasksComponent implements OnInit {
+  tasks: any[] = [];
+  description = '';
+  selectedPriority = '';
+  priorities = ['Alta', 'Média', 'Baixa'];
+
+  constructor(private tasksService: TasksService) {}
+
+  ngOnInit(): void {
+    this.loadTasks();
+  }
+
+  loadTasks(): void {
+    this.tasksService.getTasks(this.selectedPriority).subscribe((tasks) => {
+      this.tasks = tasks;
+    });
+  }
+
+  createTask(): void {
+    this.tasksService.createTask(this.description).subscribe(() => {
+      this.loadTasks();
+      this.description = '';
+    });
+  }
+}
+import { Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
+
+@Injectable({
+  providedIn: 'root',
+})
+export class TasksService {
+  private apiUrl = 'http://localhost:3000/tasks'; // Ajuste a URL do backend
+
+  constructor(private http: HttpClient) {}
+
+  getTasks(priority?: string): Observable<any[]> {
+    let params = new HttpParams();
+    if (priority) {
+      params = params.set('priority', priority);
+    }
+    return this.http.get<any[]>(this.apiUrl, { params });
+  }
+
+  createTask(description: string): Observable<any> {
+    return this.http.post(this.apiUrl, { description });
+  }
+}
+import { Controller, Get, Post, Body, Query, ValidationPipe } from '@nestjs/common';
+import { TasksService } from './tasks.service';
+import { Task } from './tasks.entity';
+import { CreateTaskDto } from './tasks.dto';
+
+@Controller('tasks')
+export class TasksController {
+  constructor(private tasksService: TasksService) {}
+
+  @Post()
+  async create(@Body(ValidationPipe) createTaskDto: CreateTaskDto): Promise<Task> {
+    return this.tasksService.create(createTaskDto.description);
+  }
+
+  @Get()
+  async findAll(@Query('priority') priority?: string): Promise<Task[]> {
+    return this.tasksService.findAll(priority);
+  }
+}
